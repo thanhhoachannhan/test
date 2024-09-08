@@ -6,9 +6,9 @@ SECRET_KEY = 'DJANGO'
 DEBUG = True
 ROOT_URLCONF = 'urls'
 STATIC_URL = 'static/'
-INSTALLED_APPS = [f'django.contrib.{app}' for app in 'admin,auth,contenttypes,messages,staticfiles'.split(',')]
+INSTALLED_APPS = [f'django.contrib.{app}' for app in 'admin,auth,sessions,contenttypes,messages,staticfiles'.split(',')] + ['rest_framework', 'rest_framework_simplejwt.token_blacklist']
 DATABASES = {'default':{'ENGINE':'django.db.backends.sqlite3','NAME':'db.sqlite3'}}
-MIDDLEWARE = [f'django.contrib.{a}.middleware.{b}Middleware' for a,b in [('auth','Authentication'),('sessions','Session'),('messages','Message')]]
+MIDDLEWARE = [f'django.contrib.{a}.middleware.{b}Middleware' for a,b in [('sessions','Session'),('auth','Authentication'),('messages','Message')]]
 TEMPLATES = [{
     'BACKEND': 'django.template.backends.django.DjangoTemplates',
     'DIRS': [BASE_DIR],
