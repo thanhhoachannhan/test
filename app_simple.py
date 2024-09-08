@@ -16,3 +16,4 @@ TEMPLATES = [{
     'OPTIONS': {'context_processors': [f'django.contrib.{x}.context_processors.{x}' for x in ['auth','messages']]}
 }]
 INSTALLED_APPS += ['rest_framework', 'rest_framework_simplejwt.token_blacklist']
+SILENCED_SYSTEM_CHECKS = ['admin.W411']
