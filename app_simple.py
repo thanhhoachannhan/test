@@ -15,7 +15,3 @@ TEMPLATES = [{
     'APP_DIRS': True,
     'OPTIONS': {'context_processors': [f'django.contrib.{x}.context_processors.{x}' for x in ['auth','messages']]}
 }]
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework_simplejwt.authentication.JWTAuthentication'],
-    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
-}
