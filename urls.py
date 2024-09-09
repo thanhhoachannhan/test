@@ -89,6 +89,56 @@ class TestView(views.APIView):
         return response.Response(serializer.data)
 
 
+class RegisterView(views.APIView):
+    class RegisterSerializer(serializers.ModelSerializer):
+        password = serializers.CharField(write_only=True, min_length=3)
+
+        class Meta:
+            model = get_user_model()
+            fields = ('username', 'email', 'password')
+
+        def create(self, validated_data):
+            user = get_user_model().objects.create_user(
+                username=validated_data['username'],
+                email=validated_data['email'],
+                password=validated_data['password']
+            )
+            return user
+
+    def post(self, request):
+        serializer = self.RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return response.Response({"detail": "Registration successful"}, status=status.HTTP_201_CREATED)
+        return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ChangePasswordView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    class ChangePasswordSerializer(serializers.Serializer):
+        current_password = serializers.CharField(required=True)
+        new_password = serializers.CharField(required=True)
+
+        def validate_current_password(self, value):
+            user = self.context['request'].user
+            if not user.check_password(value): raise serializers.ValidationError("Current password is incorrect.")
+            return value
+
+        def validate_new_password(self, value):
+            if len(value) < 3: raise serializers.ValidationError("New password must be at least 3 characters long.")
+            return value
+
+    def post(self, request):
+        serializer = self.ChangePasswordSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            user = request.user
+            user.set_password(serializer.validated_data['new_password'])
+            user.save()
+            return response.Response({"detail": "Password has been changed successfully."}, status=status.HTTP_200_OK)
+        return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class PasswordResetRequestView(views.APIView):
     def get_permissions(self):
         return [permissions.IsAuthenticated()] if self.request.method == 'GET' else [permissions.AllowAny()]
@@ -140,6 +190,14 @@ class PasswordResetConfirmView(views.APIView):
         return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class DeleteAccountView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        request.user.delete()
+        return Response({"detail": "Account has been deleted."}, status=status.HTTP_204_NO_CONTENT)
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', root),
@@ -153,8 +211,11 @@ urlpatterns = [
         ])),
         path('user/', include([
             path('', TestView.as_view(), name='test'),
+            path('register/', RegisterView.as_view(), name='register'),
+            path('change-password/', ChangePasswordView.as_view(), name='change_password'),
             path('password-reset/', PasswordResetRequestView.as_view(), name='password_reset_request'),
             path('password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+            path('delete-account/', DeleteAccountView.as_view(), name='delete_account'),
             path('me/', include([
                 path('', CurrentUser.as_view(), name='current_user'),
                 path('update/', UpdateOwnProfile.as_view(), name='update_own_profile'),
