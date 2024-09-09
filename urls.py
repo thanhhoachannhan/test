@@ -1,7 +1,9 @@
-from django.urls import path, include
+from django.urls import path, include, reverse
 from django.shortcuts import HttpResponse
+from django.core.mail import send_mail
 from django.contrib import admin
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, tokens
+from django.contrib.auth.tokens import default_token_generator
 
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView, TokenBlacklistView
 from rest_framework import serializers, status, permissions, views, response
@@ -87,6 +89,57 @@ class TestView(views.APIView):
         return response.Response(serializer.data)
 
 
+class PasswordResetRequestView(views.APIView):
+    def get_permissions(self):
+        return [permissions.IsAuthenticated()] if self.request.method == 'GET' else [permissions.AllowAny()]
+
+    class PasswordResetRequestSerializer(serializers.Serializer):
+        email = serializers.EmailField()
+
+    def get(self, request):
+        email = request.user.email
+        if not email: return response.Response({'error': 'Email not found.'}, status=status.HTTP_404_NOT_FOUND)
+        token = default_token_generator.make_token(request.user)
+        reset_url = reverse('password_reset_confirm')
+        reset_link = request.build_absolute_uri(f'{reset_url}?token={token}&email={email}')
+        send_mail('Password Reset Request', f'Link reset password: {reset_link}', 'admin@admin.com', [email])
+        return response.Response({'message': 'Password reset email sent.'}, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = self.PasswordResetRequestSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            user = get_user_model().objects.filter(email=email).first()
+            if user:
+                token = default_token_generator.make_token(user)
+                reset_url = reverse('password_reset_confirm')
+                reset_link = request.build_absolute_uri(f'{reset_url}?token={token}&email={email}')
+                send_mail('Password Reset Request', f'Link reset password: {reset_link}', 'admin@admin.com', [email])
+                return response.Response({'message': 'Password reset email sent.'}, status=status.HTTP_200_OK)
+            return response.Response({'error': 'Email not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+
+class PasswordResetConfirmView(views.APIView):
+
+    class PasswordResetConfirmSerializer(serializers.Serializer):
+        password = serializers.CharField(write_only=True)
+
+    def post(self, request):
+        serializer = self.PasswordResetConfirmSerializer(data=request.data)
+        if serializer.is_valid():
+            password = serializer.validated_data['password']
+            token = request.query_params.get('token')
+            email = request.query_params.get('email')
+            user = get_user_model().objects.filter(email=email).first()
+            if user and default_token_generator.check_token(user, token):
+                user.set_password(password)
+                user.save()
+                return response.Response({'message': 'Password has been reset.'}, status=status.HTTP_200_OK)
+            return response.Response({'error': 'Invalid token or email.'}, status=status.HTTP_400_BAD_REQUEST)
+        return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', root),
@@ -100,6 +153,8 @@ urlpatterns = [
         ])),
         path('user/', include([
             path('', TestView.as_view(), name='test'),
+            path('password-reset/', PasswordResetRequestView.as_view(), name='password_reset_request'),
+            path('password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
             path('me/', include([
                 path('', CurrentUser.as_view(), name='current_user'),
                 path('update/', UpdateOwnProfile.as_view(), name='update_own_profile'),
