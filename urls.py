@@ -65,17 +65,17 @@ class CurrentUser(views.APIView):
             )
 
 
-class UpdateOwnProfile(views.APIView):
+class UpdateProfile(views.APIView):
     permission_classes = [IsSelf]
 
-    class UpdateOwnProfileSerializer(serializers.ModelSerializer):
+    class UpdateProfileSerializer(serializers.ModelSerializer):
         class Meta:
             model = get_user_model()
             fields = ('email')
 
     def post(self, request):
         user = request.user
-        serializer = self.UpdateOwnProfileSerializer(user, data=request.data, partial=True)
+        serializer = self.UpdateProfileSerializer(user, data=request.data, partial=True)
 
         if serializer.is_valid():
             serializer.save()
@@ -85,17 +85,51 @@ class UpdateOwnProfile(views.APIView):
             )
         return response.Response(serializer.errors)
 
-class TestView(views.APIView):
+class UpdateEmailView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    class TestSerializer(serializers.ModelSerializer):
+    class UpdateEmailSerializer(serializers.Serializer):
+        email = serializers.EmailField()
+
+    def post(self, request):
+        serializer = self.UpdateEmailSerializer(data=request.data)
+        if serializer.is_valid():
+            user = request.user
+            new_email = serializer.validated_data['email']
+            user.email = new_email
+            user.save()
+            return response.Response({"detail": "Email has been updated successfully."}, status=status.HTTP_200_OK)
+        return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ListUsersView(views.APIView):
+    permission_classes = [IsSuperAdmin]
+
+    class UserSerializer(serializers.ModelSerializer):
         class Meta:
             model = get_user_model()
             fields = '__all__'
+
     def get(self, request):
-        serializer = self.TestSerializer(get_user_model().objects.all(), many=True)
-        print(serializer.data)
+        users = get_user_model().objects.all()
+        serializer = self.UserSerializer(users, many=True)
         return response.Response(serializer.data)
+
+
+class UserDetailView(views.APIView):
+    permission_classes = [IsSuperAdmin]
+
+    class UserDetailSerializer(serializers.ModelSerializer):
+        class Meta:
+            model = get_user_model()
+            fields = '__all__'
+
+    def get(self, request, user_id):
+        user = get_user_model().objects.filter(id=user_id).first()
+        if user:
+            serializer = self.UserDetailSerializer(user)
+            return response.Response(serializer.data)
+        return response.Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
 
 class RegisterView(views.APIView):
@@ -199,6 +233,49 @@ class PasswordResetConfirmView(views.APIView):
         return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class EmailVerificationRequestView(views.APIView):
+    def get_permissions(self):
+        return [permissions.IsAuthenticated()] if self.request.method == 'GET' else [permissions.AllowAny()]
+
+    class EmailVerificationRequestSerializer(serializers.Serializer):
+        email = serializers.EmailField()
+
+    def get(self, request):
+        email = request.user.email
+        if not email: return response.Response({'error': 'Email not found.'}, status=status.HTTP_404_NOT_FOUND)
+        token = default_token_generator.make_token(request.user)
+        verification_url = reverse('email_verification_confirm')
+        verification_link = request.build_absolute_uri(f'{verification_url}?token={token}&email={email}')
+        send_mail('Email Verification', f'Please verify your email by clicking this link: {verification_link}', 'admin@admin.com', [email])
+        return response.Response({'message': 'Verification email sent.'}, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = self.EmailVerificationRequestSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            user = get_user_model().objects.filter(email=email).first()
+            if user:
+                token = default_token_generator.make_token(user)
+                verification_url = reverse('email_verification_confirm')
+                verification_link = request.build_absolute_uri(f'{verification_url}?token={token}&email={email}')
+                send_mail('Email Verification', f'Please verify your email by clicking this link: {verification_link}', 'admin@admin.com', [email])
+                return response.Response({'message': 'Verification email sent.'}, status=status.HTTP_200_OK)
+            return response.Response({'error': 'Email not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmailVerificationConfirmView(views.APIView):
+    def get(self, request):
+        token = request.query_params.get('token')
+        email = request.query_params.get('email')
+        user = get_user_model().objects.filter(email=email).first()
+        if user and default_token_generator.check_token(user, token):
+            user.is_active = True
+            user.save()
+            return response.Response({'message': 'Email verified successfully.'}, status=status.HTTP_200_OK)
+        return response.Response({'error': 'Invalid token or email.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
 class DeleteAccountView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -219,15 +296,19 @@ urlpatterns = [
             path('blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
         ])),
         path('user/', include([
-            path('', TestView.as_view(), name='test'),
+            path('', ListUsersView.as_view(), name='list_users'),
+            path('<int:user_id>/', UserDetailView.as_view(), name='users_detail'),
             path('register/', RegisterView.as_view(), name='register'),
-            path('change-password/', ChangePasswordView.as_view(), name='change_password'),
-            path('password-reset/', PasswordResetRequestView.as_view(), name='password_reset_request'),
-            path('password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
-            path('delete-account/', DeleteAccountView.as_view(), name='delete_account'),
+            path('change_password/', ChangePasswordView.as_view(), name='change_password'),
+            path('password_reset/', PasswordResetRequestView.as_view(), name='password_reset_request'),
+            path('password_reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+            path('email_verification/', EmailVerificationRequestView.as_view(), name='email_verification_request'),
+            path('email_verification/confirm/', EmailVerificationConfirmView.as_view(), name='email_verification_confirm'),
+            path('delete_account/', DeleteAccountView.as_view(), name='delete_account'),
             path('me/', include([
                 path('', CurrentUser.as_view(), name='current_user'),
-                path('update/', UpdateOwnProfile.as_view(), name='update_own_profile'),
+                path('update/', UpdateProfile.as_view(), name='update_profile'),
+                path('update_email/', UpdateEmailView.as_view(), name='update_email'),
             ])),
         ]))
     ])),
