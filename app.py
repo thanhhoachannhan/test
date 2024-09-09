@@ -6,8 +6,8 @@ SECRET_KEY = 'DJANGO'
 DEBUG = True
 ROOT_URLCONF = 'urls'
 STATIC_URL = 'static/'
-INSTALLED_APPS = [f'django.contrib.{app}' for app in 'admin,auth,sessions,contenttypes,messages,staticfiles'.split(',')]
-DATABASES = {'default':{'ENGINE':'django.db.backends.sqlite3','NAME':'db.sqlite3'}}
+DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': 'db.sqlite3'}}
+INSTALLED_APPS = [f'django.contrib.{x}' for x in 'admin,auth,sessions,contenttypes,messages,staticfiles'.split(',')]
 MIDDLEWARE = [f'django.contrib.{a}.middleware.{b}Middleware' for a,b in [('sessions','Session'),('auth','Authentication'),('messages','Message')]]
 TEMPLATES = [{
     'BACKEND': 'django.template.backends.django.DjangoTemplates',
