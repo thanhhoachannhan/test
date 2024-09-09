@@ -1,4 +1,4 @@
-import os, sys, pathlib, django.core.management as exec
+import os, sys, pathlib, signal, shutil, django.core.management as exec
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'app')
 if __name__ == '__main__': exec.execute_from_command_line(sys.argv)
 BASE_DIR = pathlib.Path(__file__).resolve().parent
@@ -17,3 +17,4 @@ TEMPLATES = [{
 }]
 INSTALLED_APPS += ['rest_framework', 'rest_framework_simplejwt.token_blacklist']
 SILENCED_SYSTEM_CHECKS = ['admin.W411']
+signal.signal(signal.SIGINT, lambda sig, frame: (shutil.rmtree('__pycache__', ignore_errors=True), sys.exit(0)))
