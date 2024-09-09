@@ -144,16 +144,33 @@ class RegisterView(views.APIView):
             user = get_user_model().objects.create_user(
                 username=validated_data['username'],
                 email=validated_data['email'],
-                password=validated_data['password']
+                password=validated_data['password'],
+                is_active=False
             )
             return user
 
     def post(self, request):
         serializer = self.RegisterSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return response.Response({"detail": "Registration successful"}, status=status.HTTP_201_CREATED)
+            user = serializer.save()
+            token = default_token_generator.make_token(user)
+            verification_url = reverse('email_verification')
+            verification_link = request.build_absolute_uri(f'{verification_url}?token={token}&email={user.email}')
+            send_mail('Email Verification', f'Link verify: {verification_link}', 'admin@admin.com', [user.email])
+            return response.Response({"detail": "Registration successful, please check your email for verification."}, status=status.HTTP_201_CREATED)
         return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmailVerificationView(views.APIView):
+    def get(self, request):
+        token = request.query_params.get('token')
+        email = request.query_params.get('email')
+        user = get_user_model().objects.filter(email=email).first()
+        if user and default_token_generator.check_token(user, token):
+            user.is_active = True
+            user.save()
+            return response.Response({'message': 'Email verified successfully, your account is now active.'}, status=status.HTTP_200_OK)
+        return response.Response({'error': 'Invalid token or email.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ChangePasswordView(views.APIView):
@@ -233,49 +250,6 @@ class PasswordResetConfirmView(views.APIView):
         return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class EmailVerificationRequestView(views.APIView):
-    def get_permissions(self):
-        return [permissions.IsAuthenticated()] if self.request.method == 'GET' else [permissions.AllowAny()]
-
-    class EmailVerificationRequestSerializer(serializers.Serializer):
-        email = serializers.EmailField()
-
-    def get(self, request):
-        email = request.user.email
-        if not email: return response.Response({'error': 'Email not found.'}, status=status.HTTP_404_NOT_FOUND)
-        token = default_token_generator.make_token(request.user)
-        verification_url = reverse('email_verification_confirm')
-        verification_link = request.build_absolute_uri(f'{verification_url}?token={token}&email={email}')
-        send_mail('Email Verification', f'Please verify your email by clicking this link: {verification_link}', 'admin@admin.com', [email])
-        return response.Response({'message': 'Verification email sent.'}, status=status.HTTP_200_OK)
-
-    def post(self, request):
-        serializer = self.EmailVerificationRequestSerializer(data=request.data)
-        if serializer.is_valid():
-            email = serializer.validated_data['email']
-            user = get_user_model().objects.filter(email=email).first()
-            if user:
-                token = default_token_generator.make_token(user)
-                verification_url = reverse('email_verification_confirm')
-                verification_link = request.build_absolute_uri(f'{verification_url}?token={token}&email={email}')
-                send_mail('Email Verification', f'Please verify your email by clicking this link: {verification_link}', 'admin@admin.com', [email])
-                return response.Response({'message': 'Verification email sent.'}, status=status.HTTP_200_OK)
-            return response.Response({'error': 'Email not found.'}, status=status.HTTP_404_NOT_FOUND)
-        return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class EmailVerificationConfirmView(views.APIView):
-    def get(self, request):
-        token = request.query_params.get('token')
-        email = request.query_params.get('email')
-        user = get_user_model().objects.filter(email=email).first()
-        if user and default_token_generator.check_token(user, token):
-            user.is_active = True
-            user.save()
-            return response.Response({'message': 'Email verified successfully.'}, status=status.HTTP_200_OK)
-        return response.Response({'error': 'Invalid token or email.'}, status=status.HTTP_400_BAD_REQUEST)
-
-
 class DeleteAccountView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -299,11 +273,10 @@ urlpatterns = [
             path('', ListUsersView.as_view(), name='list_users'),
             path('<int:user_id>/', UserDetailView.as_view(), name='users_detail'),
             path('register/', RegisterView.as_view(), name='register'),
+            path('email_verification/', EmailVerificationView.as_view(), name='email_verification'),
             path('change_password/', ChangePasswordView.as_view(), name='change_password'),
             path('password_reset/', PasswordResetRequestView.as_view(), name='password_reset_request'),
             path('password_reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
-            path('email_verification/', EmailVerificationRequestView.as_view(), name='email_verification_request'),
-            path('email_verification/confirm/', EmailVerificationConfirmView.as_view(), name='email_verification_confirm'),
             path('delete_account/', DeleteAccountView.as_view(), name='delete_account'),
             path('me/', include([
                 path('', CurrentUser.as_view(), name='current_user'),
