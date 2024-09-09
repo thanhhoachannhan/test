@@ -1,3 +1,12 @@
+"""
+    TODO:
+        ACCOUNT:
+            - Social networks login
+            - Session Management api (Current session, other devices, ...)
+            - Email Verification For Account
+            - Login History
+"""
+
 from django.urls import path, include, reverse
 from django.shortcuts import HttpResponse
 from django.core.mail import send_mail
