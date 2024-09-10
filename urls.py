@@ -8,6 +8,7 @@
 """
 
 from django.urls import path, include, reverse
+from django.conf import settings
 from django.shortcuts import HttpResponse
 from django.core.mail import send_mail
 from django.contrib import admin
@@ -17,6 +18,9 @@ from django.contrib.auth.tokens import default_token_generator
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView, TokenBlacklistView
 from rest_framework import serializers, status, permissions, views, response
 
+
+settings.REST_FRAMEWORK = {'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework_simplejwt.authentication.JWTAuthentication']}
+settings.EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 def root(request): return HttpResponse('Hello')
 
