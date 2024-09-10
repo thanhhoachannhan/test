@@ -259,7 +259,7 @@ class DeleteAccountView(views.APIView):
 
     def delete(self, request):
         request.user.delete()
-        return Response({"detail": "Account has been deleted."}, status=status.HTTP_204_NO_CONTENT)
+        return response.Response({"detail": "Account has been deleted."}, status=status.HTTP_204_NO_CONTENT)
 
 
 urlpatterns = [
