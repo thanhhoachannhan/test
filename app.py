@@ -9,4 +9,4 @@ TEMPLATES=[{'BACKEND':'django.template.backends.django.DjangoTemplates','DIRS':[
 REST_FRAMEWORK = {'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework_simplejwt.authentication.JWTAuthentication']}
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 SILENCED_SYSTEM_CHECKS=['admin.W411']
-import sys,signal,shutil; signal.signal(signal.SIGINT, lambda sig, frame: (shutil.rmtree('__pycache__', ignore_errors=True), sys.exit(0)))
+import os,sys,signal,shutil; signal.signal(signal.SIGINT, lambda sig, frame: (shutil.rmtree('__pycache__', ignore_errors=True), os.remove('db.sqlite3'), sys.exit(0)))
