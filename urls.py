@@ -18,28 +18,13 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework import serializers, status, permissions, views, response
 
 
-settings.SILENCED_SYSTEM_CHECKS=['admin.W411']
-import sys,signal,shutil; signal.signal(signal.SIGINT, lambda sig, frame: (shutil.rmtree('__pycache__', ignore_errors=True), sys.exit(0)))
-settings.REST_FRAMEWORK = {'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework_simplejwt.authentication.JWTAuthentication']}
-settings.EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-
-def root(request): return HttpResponse('Hello')
+class IsSelf(permissions.BasePermission): has_object_permission = lambda self, request, view, obj: True if request.method in permissions.SAFE_METHODS else request.user == obj
+class IsSuperAdmin(permissions.BasePermission): has_permission = lambda self, request, view: request.user and request.user.is_superuser
+class IsManager(permissions.BasePermission): has_permission = lambda self, request, view: request.user and request.user.is_staff
+class IsGuest(permissions.BasePermission): has_permission = lambda self, request, view: request.user and not (request.user.is_superuser or request.user.is_staff)
 
 
-class IsSelf(permissions.BasePermission):
-    def has_object_permission(self, request, view, obj):
-        if request.method in permissions.SAFE_METHODS: return True
-        return request.user == obj
-
-class IsSuperAdmin(permissions.BasePermission):
-    def has_permission(self, request, view): return request.user and request.user.is_superuser
-
-class IsManager(permissions.BasePermission):
-    def has_permission(self, request, view): return request.user and request.user.is_staff
-
-class IsGuest(permissions.BasePermission):
-    def has_permission(self, request, view): return request.user and not (request.user.is_superuser or request.user.is_staff)
-
+def root(request): return HttpResponse('root')
 
 class CurrentUser(views.APIView):
     def get_permissions(self):
