@@ -6,7 +6,6 @@
             - Email Verification For Account
             - Login History
 """
-
 from django.urls import path, include, reverse
 from django.conf import settings
 from django.shortcuts import HttpResponse
@@ -19,6 +18,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework import serializers, status, permissions, views, response
 
 
+settings.SILENCED_SYSTEM_CHECKS=['admin.W411']
+import sys,signal,shutil; signal.signal(signal.SIGINT, lambda sig, frame: (shutil.rmtree('__pycache__', ignore_errors=True), sys.exit(0)))
 settings.REST_FRAMEWORK = {'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework_simplejwt.authentication.JWTAuthentication']}
 settings.EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
