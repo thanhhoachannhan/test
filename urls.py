@@ -11,11 +11,15 @@ from django.conf import settings
 from django.shortcuts import HttpResponse
 from django.core.mail import send_mail
 from django.contrib import admin
-from django.contrib.auth import get_user_model, tokens
+from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView, TokenBlacklistView
 from rest_framework import serializers, status, permissions, views, response
+
+
+settings.SILENCED_SYSTEM_CHECKS=['admin.W411']
+import os,sys,signal,shutil; signal.signal(signal.SIGINT, lambda sig, frame: (shutil.rmtree('__pycache__', ignore_errors=True), sys.exit(0)))
 
 
 class IsSelf(permissions.BasePermission): has_object_permission = lambda self, request, view, obj: True if request.method in permissions.SAFE_METHODS else request.user == obj
@@ -144,14 +148,45 @@ class RegisterView(views.APIView):
         if serializer.is_valid():
             user = serializer.save()
             token = default_token_generator.make_token(user)
-            verification_url = reverse('email_verification')
+            verification_url = reverse('email_verification_confirm')
             verification_link = request.build_absolute_uri(f'{verification_url}?token={token}&email={user.email}')
             send_mail('Email Verification', f'Link verify: {verification_link}', 'admin@admin.com', [user.email])
             return response.Response({"detail": "Registration successful, please check your email for verification."}, status=status.HTTP_201_CREATED)
         return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class EmailVerificationView(views.APIView):
+class EmailVerificationRequestView(views.APIView):
+    def get_permissions(self):
+        return [permissions.IsAuthenticated()] if self.request.method == 'GET' else [permissions.AllowAny()]
+
+    class EmailVerificationRequestSerializer(serializers.Serializer):
+        email = serializers.EmailField()
+
+    def get(self, request):
+        email = request.user.email
+        if not email: return response.Response({'error': 'Email not found.'}, status=status.HTTP_404_NOT_FOUND)
+        token = default_token_generator.make_token(request.user)
+        verification_url = reverse('email_verification_confirm')
+        verification_link = request.build_absolute_uri(f'{verification_url}?token={token}&email={email}')
+        send_mail('Email Verification', f'Please verify your email by clicking this link: {verification_link}', 'admin@admin.com', [email])
+        return response.Response({'message': 'Verification email sent.'}, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = self.EmailVerificationRequestSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            user = get_user_model().objects.filter(email=email).first()
+            if user:
+                token = default_token_generator.make_token(user)
+                verification_url = reverse('email_verification_confirm')
+                verification_link = request.build_absolute_uri(f'{verification_url}?token={token}&email={email}')
+                send_mail('Email Verification', f'Please verify your email by clicking this link: {verification_link}', 'admin@admin.com', [email])
+                return response.Response({'message': 'Verification email sent.'}, status=status.HTTP_200_OK)
+            return response.Response({'error': 'Email not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        
+class EmailVerificationConfirmView(views.APIView):
     def get(self, request):
         token = request.query_params.get('token')
         email = request.query_params.get('email')
@@ -187,7 +222,6 @@ class ChangePasswordView(views.APIView):
             user.save()
             return response.Response({"detail": "Password has been changed successfully."}, status=status.HTTP_200_OK)
         return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class PasswordResetRequestView(views.APIView):
     def get_permissions(self):
@@ -263,7 +297,8 @@ urlpatterns = [
             path('', ListUsersView.as_view(), name='list_users'),
             path('<int:user_id>/', UserDetailView.as_view(), name='users_detail'),
             path('register/', RegisterView.as_view(), name='register'),
-            path('email_verification/', EmailVerificationView.as_view(), name='email_verification'),
+            path('email_verification/', EmailVerificationRequestView.as_view(), name='email_verification_request'),
+            path('email_verification/confirm/', EmailVerificationConfirmView.as_view(), name='email_verification_confirm'),
             path('change_password/', ChangePasswordView.as_view(), name='change_password'),
             path('password_reset/', PasswordResetRequestView.as_view(), name='password_reset_request'),
             path('password_reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
